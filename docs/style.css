@@ -128,3 +128,6 @@ main[data-state="done"] .hint, main[data-state="connecting"] .hint { display: no
 main.inapp { --orb: clamp(140px, 40vw, 180px); }
 main.inapp .talkback { min-height: 0; }
 main:has(#received:not([hidden])) .hint { display: none; }
+
+/* Never show what the mic heard (side talk at the table); see showLine in main.js. */
+.line.guest { display: none !important; }

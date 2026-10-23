@@ -123,6 +123,8 @@ const firstAt = new Map();
 const textOf = (c) => (typeof c === "string" ? c : c && typeof c.text === "string" ? c.text : "");
 const isEnd = (m) => m.type === "action" && ["end", "hangup"].includes(m.content?.action?.type ?? m.content?.type ?? "");
 
+// Only the agent's line is shown: the mic also hears the table, and a guest's private talk must never appear on screen.
+// The guest line is still kept (hidden) for diagnostics.
 function showLine(role, text) {
   if (!$("received").hidden) return;
   $("lines").hidden = false;
