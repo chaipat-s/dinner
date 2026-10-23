@@ -167,7 +167,7 @@ async function start() {
       modality: "voice",
       source: "in_website",
       locale: "th",
-      metadata: { seat: String(seat), lang: (navigator.language || "").slice(0, 2) },
+      metadata: { seat: String(seat), lang: (params.get("lang") || navigator.language || "").slice(0, 2).toLowerCase() },
     });
     voice = session.connectVoice();
     await new Promise((resolve, reject) => {
