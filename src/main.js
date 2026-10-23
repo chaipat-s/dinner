@@ -12,13 +12,17 @@ const CLOSED = [/^ขออภัยค่ะ ตอนนี้รบกวน�
 const HANG_UP_AFTER_MS = 9000;
 
 const params = new URLSearchParams(location.search);
+// Hold-to-talk (?mode=hold): the mic is open only while the guest holds the orb, so table talk never reaches the agent.
+const HOLD = params.get("mode") === "hold";
+const RELEASE_TAIL_MS = 350;
 const seatRaw = Number(params.get("s"));
 const seat = Number.isInteger(seatRaw) && seatRaw >= 1 && seatRaw <= 20 ? seatRaw : null;
 
 const STATUS = {
   idle: ["แตะเพื่อสั่งเครื่องดื่ม", "Tap to order a drink"],
   connecting: ["กำลังเชื่อมต่อ…", "Connecting…"],
-  live: ["พูดได้เลยค่ะ", "Go ahead, I'm listening"],
+  live: HOLD ? ["กดค้างที่วงกลมแล้วพูด", "Hold the circle and speak"] : ["พูดได้เลยค่ะ", "Go ahead, I'm listening"],
+  holding: ["กำลังฟัง… ปล่อยเมื่อพูดจบ", "Listening… let go when you're done"],
   done: ["แตะเพื่อสั่งอีก", "Tap to order again"],
   failed: ["เชื่อมต่อไม่สำเร็จ แตะเพื่อลองใหม่", "Couldn't connect. Tap to try again"],
   mic: ["กรุณาอนุญาตไมโครโฟน แล้วแตะอีกครั้ง", "Please allow the microphone, then tap again"],
@@ -32,7 +36,7 @@ function setState(state, statusKey = state) {
   $("status-en").textContent = en;
   $("end").hidden = !(state === "live" || state === "connecting");
   $("again").hidden = state !== "done";
-  $("talk").disabled = state === "live" || state === "connecting" || !seat;
+  $("talk").disabled = (state === "live" && !HOLD) || state === "connecting" || !seat;
   orb?.setState(state === "live" ? "listening" : state === "connecting" ? "thinking" : state === "done" ? "complete" : "idle");
 }
 
@@ -187,6 +191,7 @@ async function start() {
     });
     if (g !== gen) return;
     stops.push(session.subscribe((m) => onMessage(g, m), { onStatus: (s) => s === "closed" && g === gen && finish() }));
+    if (HOLD) voice.setMuted(true);
     setState("live");
   } catch (err) {
     console.warn("call failed", err);
@@ -197,7 +202,28 @@ async function start() {
   }
 }
 
-$("talk").addEventListener("click", start);
+$("talk").addEventListener("click", () => {
+  if (!(HOLD && app.dataset.state === "live")) start();
+});
+// Hold-to-talk: open the mic on press, close it a moment after release (so the last word is not cut).
+let releaseTimer = 0;
+const press = (e) => {
+  if (!HOLD || app.dataset.state !== "live" || !voice) return;
+  e.preventDefault();
+  clearTimeout(releaseTimer);
+  voice.setMuted(false);
+  app.dataset.holding = "1";
+  setState("live", "holding");
+};
+const release = () => {
+  if (!HOLD || app.dataset.holding !== "1") return;
+  app.dataset.holding = "";
+  releaseTimer = setTimeout(() => voice?.setMuted(true), RELEASE_TAIL_MS);
+  if (app.dataset.state === "live") setState("live");
+};
+$("talk").addEventListener("pointerdown", press);
+for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("talk").addEventListener(ev, release);
+$("talk").addEventListener("contextmenu", (e) => HOLD && e.preventDefault());
 $("again").addEventListener("click", start);
 $("end").addEventListener("click", () => {
   teardown();
