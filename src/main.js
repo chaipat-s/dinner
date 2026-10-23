@@ -82,6 +82,7 @@ const textOf = (c) => (typeof c === "string" ? c : c && typeof c.text === "strin
 const isEnd = (m) => m.type === "action" && ["end", "hangup"].includes(m.content?.action?.type ?? m.content?.type ?? "");
 
 function showLine(role, text) {
+  if (!$("received").hidden) return;
   $("lines").hidden = false;
   $(role === "user" ? "line-guest" : "line-agent").textContent = text;
 }
@@ -99,6 +100,7 @@ function onMessage(g, m) {
   showLine(m.role, text);
   if (m.role === "assistant" && SENT.some((r) => r.test(text))) {
     $("received").hidden = false;
+    $("lines").hidden = true;
     $("received-text").textContent = text.replace(SENT[0], "").replace(SENT[1], "").replace(/^[.\s]+/, "");
     // The order is in: stop listening so a "thanks" cannot start another turn, and hang up after the line plays.
     voice?.setMuted(true);
