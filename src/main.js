@@ -151,7 +151,7 @@ function onMessage(g, m) {
     syncOrb();
   }
   if (m.role === "assistant" && SENT.some((r) => r.test(text))) {
-    $("received-text").textContent = text.replace(SENT[0], "").replace(SENT[1], "").replace(/^[.\s]+/, "");
+    $("received-text").textContent = orderText(text);
     if (!$("received").hidden) return;
     $("received").hidden = false;
     $("lines").hidden = true;
@@ -162,6 +162,15 @@ function onMessage(g, m) {
     hangUpSoon();
   } else if (m.role === "assistant" && CLOSED.some((r) => r.test(text))) hangUpSoon();
 }
+
+// The card shows only the order; the seat is in the banner and the waiter line is the card's own note.
+const orderText = (t) =>
+  t
+    .replace(SENT[0], "").replace(SENT[1], "").replace(/^[.\s]+/, "")
+    .replace(/\s*(พนักงานจะ|A waiter will).*$/s, "")
+    .replace(/\s*สำหรับที่นั่ง\s*\d+$/, "")
+    .replace(/,?\s*for seat \d+\.?$/i, "")
+    .trim();
 
 function hangUpSoon() {
   clearTimeout(hangTimer);
