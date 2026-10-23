@@ -1,0 +1,1 @@
+`wonderfulOrb.js` and `all-blue.webp`: the Wonderful agent orb, copied from `clients/ascend-truemoney/workspaces/demo-th-wallet-care-04/apps/truemoney-care-room/app/src/lib/orb/` (itself from the Wonderful monorepo `libs/ui/src/components/Sphere/`, see that folder's SOURCE.md). Wonderful's own code; unchanged.

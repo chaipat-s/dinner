@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="robots" content="noindex">
+  <title>Wonderful · สั่งเครื่องดื่ม</title>
+  <link rel="preconnect" href="https://th.api.demo.wonderful.ai">
+  <link rel="stylesheet" href="style.css?v=__V__">
+</head>
+<body>
+  <main id="app" data-state="idle">
+    <header class="brand">Wonderful</header>
+
+    <div id="inapp" class="banner" hidden>
+      <p>เปิดหน้านี้ใน Safari หรือ Chrome เพื่อใช้ไมโครโฟน</p>
+      <p class="en">Open this page in Safari or Chrome to use the microphone.</p>
+      <a id="inapp-open" class="banner-btn" href="#">เปิดในเบราว์เซอร์ · Open in browser</a>
+    </div>
+
+    <section class="seat" id="seat">
+      <p class="seat-th">ที่นั่ง <span data-seat></span></p>
+      <p class="seat-en">Seat <span data-seat></span></p>
+    </section>
+
+    <section class="seat seat-missing" id="no-seat" hidden>
+      <p class="seat-th small">สแกน QR บนการ์ดที่ที่นั่งของคุณ</p>
+      <p class="seat-en">Scan the QR code on your seat card.</p>
+    </section>
+
+    <button id="talk" class="orb-btn" type="button" aria-label="แตะเพื่อสั่งเครื่องดื่ม · Tap to order a drink">
+      <span class="orb">
+        <img class="orb-still" src="orb.webp" alt="" width="200" height="200">
+        <canvas class="orb-live" hidden></canvas>
+      </span>
+    </button>
+
+    <section class="status" aria-live="polite">
+      <p class="status-th" id="status-th">แตะเพื่อสั่งเครื่องดื่ม</p>
+      <p class="status-en" id="status-en">Tap to order a drink</p>
+    </section>
+
+    <section class="lines" id="lines" hidden>
+      <p class="line agent" id="line-agent"></p>
+      <p class="line guest" id="line-guest"></p>
+    </section>
+
+    <section class="received" id="received" hidden>
+      <p class="received-title">รับรายการแล้ว · Order received</p>
+      <p class="received-text" id="received-text"></p>
+      <p class="received-note">พนักงานจะนำมาเสิร์ฟที่นั่งของคุณ · A waiter will bring it to your seat.</p>
+    </section>
+
+    <div class="actions">
+      <button id="end" class="btn ghost" type="button" hidden>วางสาย · End</button>
+      <button id="again" class="btn" type="button" hidden>สั่งเพิ่ม · Order another</button>
+    </div>
+
+    <p class="hint" id="hint">ถือโทรศัพท์ใกล้ปาก เหมือนส่งข้อความเสียง<br><span class="en">Hold the phone close, like a voice message.</span></p>
+  </main>
+  <script type="module" src="app.js?v=__V__"></script>
+</body>
+</html>
