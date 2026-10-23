@@ -3,20 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1020">
+  <meta name="theme-color" content="#06080d">
+  <meta name="color-scheme" content="dark">
   <meta name="robots" content="noindex">
+  <meta name="format-detection" content="telephone=no">
   <title>Wonderful · สั่งเครื่องดื่ม</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://th.api.demo.wonderful.ai">
+  <link rel="preload" as="image" href="orb.webp">
   <link rel="stylesheet" href="style.css?v=__V__">
 </head>
 <body>
   <main id="app" data-state="idle">
-    <header class="brand">Wonderful</header>
+    <header class="top">
+      <span class="brand">Wonderful</span>
+    </header>
 
     <div id="inapp" class="banner" hidden>
-      <p>เปิดหน้านี้ใน Safari หรือ Chrome เพื่อใช้ไมโครโฟน</p>
-      <p class="en">Open this page in Safari or Chrome to use the microphone.</p>
-      <a id="inapp-open" class="banner-btn" href="#">เปิดในเบราว์เซอร์ · Open in browser</a>
+      <p class="banner-th">เปิดหน้านี้ใน Safari หรือ Chrome เพื่อใช้ไมโครโฟน</p>
+      <p class="banner-en">Open this page in Safari or Chrome to use the microphone.</p>
+      <a id="inapp-open" class="btn btn-light" href="#"><span class="th">เปิดในเบราว์เซอร์</span><span class="en">Open in browser</span></a>
     </div>
 
     <section class="seat" id="seat">
@@ -25,39 +31,48 @@
     </section>
 
     <section class="seat seat-missing" id="no-seat" hidden>
-      <p class="seat-th small">สแกน QR บนการ์ดที่ที่นั่งของคุณ</p>
+      <p class="seat-th small">สแกน QR บนการ์ดที่นั่งของคุณ</p>
       <p class="seat-en">Scan the QR code on your seat card.</p>
     </section>
 
-    <button id="talk" class="orb-btn" type="button" aria-label="แตะเพื่อสั่งเครื่องดื่ม · Tap to order a drink">
-      <span class="orb">
-        <img class="orb-still" src="orb.webp" alt="" width="200" height="200">
-        <canvas class="orb-live" hidden></canvas>
-      </span>
-    </button>
+    <div class="stage">
+      <button id="talk" class="orb-btn" type="button" aria-label="แตะเพื่อสั่งเครื่องดื่ม · Tap to order a drink">
+        <span class="orb">
+          <img class="orb-still" src="orb.webp" alt="" width="200" height="200" decoding="async" fetchpriority="high">
+          <canvas class="orb-live" hidden></canvas>
+        </span>
+      </button>
 
-    <section class="status" aria-live="polite">
-      <p class="status-th" id="status-th">แตะเพื่อสั่งเครื่องดื่ม</p>
-      <p class="status-en" id="status-en">Tap to order a drink</p>
-    </section>
-
-    <section class="lines" id="lines" hidden>
-      <p class="line agent" id="line-agent"></p>
-      <p class="line guest" id="line-guest"></p>
-    </section>
-
-    <section class="received" id="received" hidden>
-      <p class="received-title">รับรายการแล้ว · Order received</p>
-      <p class="received-text" id="received-text"></p>
-      <p class="received-note">พนักงานจะนำมาเสิร์ฟที่นั่งของคุณ · A waiter will bring it to your seat.</p>
-    </section>
-
-    <div class="actions">
-      <button id="end" class="btn ghost" type="button" hidden>วางสาย · End</button>
-      <button id="again" class="btn" type="button" hidden>สั่งเพิ่ม · Order another</button>
+      <section class="status" aria-live="polite">
+        <p class="status-th" id="status-th">แตะเพื่อสั่งเครื่องดื่ม</p>
+        <p class="status-en" id="status-en">Tap to order a drink</p>
+      </section>
     </div>
 
-    <p class="hint" id="hint">ถือโทรศัพท์ใกล้ปาก เหมือนส่งข้อความเสียง<br><span class="en">Hold the phone close, like a voice message.</span></p>
+    <div class="talkback">
+      <section class="lines" id="lines" hidden>
+        <p class="line guest" id="line-guest"></p>
+        <p class="line agent" id="line-agent"></p>
+      </section>
+
+      <section class="received" id="received" hidden aria-live="polite">
+        <div class="received-head">
+          <svg class="tick" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.2 3.1L17 8.8"/></svg>
+          <div>
+            <p class="received-th">รับรายการแล้ว</p>
+            <p class="received-en">Order received</p>
+          </div>
+        </div>
+        <p class="received-text" id="received-text"></p>
+        <p class="received-note">พนักงานจะนำมาเสิร์ฟที่นั่งของคุณ<br><span class="en">A waiter will bring it to your seat.</span></p>
+      </section>
+    </div>
+
+    <footer class="dock">
+      <p class="hint" id="hint">ถือโทรศัพท์ใกล้ปาก เหมือนส่งข้อความเสียง<br><span class="en">Hold the phone close, like a voice message.</span></p>
+      <button id="end" class="btn btn-quiet" type="button" hidden><span class="th">วางสาย</span><span class="en">End</span></button>
+      <button id="again" class="btn btn-light" type="button" hidden><span class="th">สั่งเพิ่ม</span><span class="en">Order another</span></button>
+    </footer>
   </main>
   <script type="module" src="app.js?v=__V__"></script>
 </body>

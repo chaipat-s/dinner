@@ -23,10 +23,11 @@ const STATUS = {
   connecting: ["กำลังเชื่อมต่อ…", "Connecting…"],
   live: HOLD ? ["กดค้างที่วงกลมแล้วพูด", "Hold the circle and speak"] : ["พูดได้เลยค่ะ", "Go ahead, I'm listening"],
   holding: ["กำลังฟัง… ปล่อยเมื่อพูดจบ", "Listening… let go when you're done"],
-  done: ["แตะเพื่อสั่งอีก", "Tap to order again"],
+  done: ["สั่งเพิ่มได้ทุกเมื่อ", "Order again any time"],
+  sent: ["เรียบร้อยค่ะ", "All set"],
   failed: ["เชื่อมต่อไม่สำเร็จ แตะเพื่อลองใหม่", "Couldn't connect. Tap to try again"],
   mic: ["กรุณาอนุญาตไมโครโฟน แล้วแตะอีกครั้ง", "Please allow the microphone, then tap again"],
-  noseat: ["สแกน QR บนการ์ดอีกครั้ง", "Please scan your seat card again"],
+  noseat: ["ไม่พบเลขที่นั่ง", "No seat number found"],
 };
 
 function setState(state, statusKey = state) {
@@ -37,8 +38,37 @@ function setState(state, statusKey = state) {
   $("end").hidden = !(state === "live" || state === "connecting");
   $("again").hidden = state !== "done";
   $("talk").disabled = (state === "live" && !HOLD) || state === "connecting" || !seat;
-  orb?.setState(state === "live" ? "listening" : state === "connecting" ? "thinking" : state === "done" ? "complete" : "idle");
+  if (state !== "live") agentUntil = heardAt = 0;
+  syncOrb();
 }
+
+// ---- orb choreography, driven by real call events only
+// live: listening by default; thinking once the guest's words stop for 0.6 s, until the agent replies (max 5 s);
+// speaking for about as long as the agent's line takes to say.
+let agentUntil = 0;
+let heardAt = 0;
+let orbTimer = 0;
+let orbNow = "";
+function syncOrb() {
+  clearTimeout(orbTimer);
+  const st = app.dataset.state;
+  const now = Date.now();
+  let next = st === "connecting" ? "thinking" : st === "done" ? "complete" : st === "failed" ? "idle" : "idle";
+  if (st === "live") {
+    if (agentUntil > now) next = "speaking";
+    else if (heardAt && now - heardAt > 600 && now - heardAt < 5000) next = "thinking";
+    else next = $("received").hidden ? "listening" : "complete";
+    const wake = Math.min(...[agentUntil, heardAt && heardAt + 600, heardAt && heardAt + 5000].filter((t) => t > now));
+    if (Number.isFinite(wake)) orbTimer = setTimeout(syncOrb, wake - now + 30);
+  }
+  if (next === orbNow) return;
+  orbNow = next;
+  app.dataset.orb = next;
+  if (next !== "listening") orb?.setAudioLevel(0);
+  orb?.setState(next);
+}
+const speakMs = (text) => 700 + text.length * (/[\u0e00-\u0e7f]/.test(text) ? 75 : 62);
+const buzz = (p) => navigator.vibrate?.(p);
 
 // ---- seat
 document.querySelectorAll("[data-seat]").forEach((el) => (el.textContent = seat ?? ""));
@@ -49,6 +79,7 @@ $("no-seat").hidden = !!seat;
 const ua = navigator.userAgent;
 if (/\bLine\//i.test(ua) || /FBAN|FBAV|Instagram|MicroMessenger/i.test(ua)) {
   $("inapp").hidden = false;
+  app.classList.add("inapp");
   const url = new URL(location.href);
   if (/\bLine\//i.test(ua)) url.searchParams.set("openExternalBrowser", "1");
   $("inapp-open").href = url.toString();
@@ -60,14 +91,20 @@ try {
   const canvas = document.querySelector(".orb-live");
   const gl = document.createElement("canvas").getContext("webgl2");
   if (gl) {
-    orb = createAgentOrb(canvas, { theme: "all-blue", state: "idle", quality: "balanced", fill: 1 / 1.24, reducedMotion: "user", onError: () => showStill() });
+    orb = createAgentOrb(canvas, { theme: "all-blue", state: "idle", quality: "balanced", fill: 1 / 1.24, transition: 0.45, reducedMotion: "user", onError: () => showStill() });
     canvas.hidden = false;
-    document.querySelector(".orb-still").style.visibility = "hidden";
+    // The still stays under the canvas until the first frames are drawn, so the orb never blinks out.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (canvas.hidden) return;
+      canvas.classList.add("on");
+      setTimeout(() => !canvas.hidden && (document.querySelector(".orb-still").style.visibility = "hidden"), 450);
+    }));
   }
 } catch {
   orb = null;
 }
 function showStill() {
+  orb = null;
   document.querySelector(".orb-live").hidden = true;
   document.querySelector(".orb-still").style.visibility = "visible";
 }
@@ -81,6 +118,7 @@ let hangTimer = 0;
 let wakeLock = null;
 let gen = 0;
 const seen = new Map();
+const firstAt = new Map();
 
 const textOf = (c) => (typeof c === "string" ? c : c && typeof c.text === "string" ? c.text : "");
 const isEnd = (m) => m.type === "action" && ["end", "hangup"].includes(m.content?.action?.type ?? m.content?.type ?? "");
@@ -97,17 +135,30 @@ function onMessage(g, m) {
   if (m.role !== "user" && m.role !== "assistant") return;
   if (m.type === "thinking" || m.type === "action") return;
   const text = textOf(m.content).replace(/[\u200b\ufeff]/g, "").trim();
-  if (!text) return;
+  // Platform markers such as "[BACKCHANNEL_IGNORED] Hi." are not words the guest should see.
+  if (!text || /^\[[A-Z_]+\]/.test(text)) return;
   const rev = m.revision ?? 0;
   if ((seen.get(m.id) ?? -1) > rev) return;
   seen.set(m.id, rev);
   showLine(m.role, text);
+  if (app.dataset.state === "live") {
+    if (m.role === "user") heardAt = Date.now();
+    else {
+      heardAt = 0;
+      if (!firstAt.has(m.id)) firstAt.set(m.id, Date.now());
+      agentUntil = Math.max(agentUntil, firstAt.get(m.id) + speakMs(text));
+    }
+    syncOrb();
+  }
   if (m.role === "assistant" && SENT.some((r) => r.test(text))) {
+    $("received-text").textContent = text.replace(SENT[0], "").replace(SENT[1], "").replace(/^[.\s]+/, "");
+    if (!$("received").hidden) return;
     $("received").hidden = false;
     $("lines").hidden = true;
-    $("received-text").textContent = text.replace(SENT[0], "").replace(SENT[1], "").replace(/^[.\s]+/, "");
     // The order is in: stop listening so a "thanks" cannot start another turn, and hang up after the line plays.
     voice?.setMuted(true);
+    setState("live", "sent");
+    buzz([18, 70, 18]);
     hangUpSoon();
   } else if (m.role === "assistant" && CLOSED.some((r) => r.test(text))) hangUpSoon();
 }
@@ -142,6 +193,7 @@ async function start() {
   teardown();
   const g = gen;
   seen.clear();
+  firstAt.clear();
   $("received").hidden = true;
   $("lines").hidden = true;
   $("line-agent").textContent = "";
@@ -153,7 +205,10 @@ async function start() {
     probe.getTracks().forEach((t) => t.stop());
   } catch (err) {
     console.warn("microphone", err);
-    if (g === gen) setState("failed", "mic");
+    if (g === gen) {
+      setState("failed", "mic");
+      buzz(40);
+    }
     return;
   }
   try {
@@ -176,7 +231,7 @@ async function start() {
       stops.push(
         voice.subscribe((st) => {
           if (g !== gen) return;
-          orb?.setAudioLevel(st.audioLevel ?? 0);
+          if (orbNow === "listening") orb?.setAudioLevel(st.audioLevel ?? 0);
           if (st.status === "connected" && !ok) {
             ok = true;
             clearTimeout(timer);
@@ -193,11 +248,13 @@ async function start() {
     stops.push(session.subscribe((m) => onMessage(g, m), { onStatus: (s) => s === "closed" && g === gen && finish() }));
     if (HOLD) voice.setMuted(true);
     setState("live");
+    buzz(12);
   } catch (err) {
     console.warn("call failed", err);
     if (g === gen) {
       teardown();
       setState("failed");
+      buzz(40);
     }
   }
 }
@@ -208,10 +265,11 @@ $("talk").addEventListener("click", () => {
 // Hold-to-talk: open the mic on press, close it a moment after release (so the last word is not cut).
 let releaseTimer = 0;
 const press = (e) => {
-  if (!HOLD || app.dataset.state !== "live" || !voice) return;
+  if (!HOLD || app.dataset.state !== "live" || !voice || !$("received").hidden) return;
   e.preventDefault();
   clearTimeout(releaseTimer);
   voice.setMuted(false);
+  buzz(8);
   app.dataset.holding = "1";
   setState("live", "holding");
 };
@@ -219,7 +277,7 @@ const release = () => {
   if (!HOLD || app.dataset.holding !== "1") return;
   app.dataset.holding = "";
   releaseTimer = setTimeout(() => voice?.setMuted(true), RELEASE_TAIL_MS);
-  if (app.dataset.state === "live") setState("live");
+  if (app.dataset.state === "live" && $("received").hidden) setState("live");
 };
 $("talk").addEventListener("pointerdown", press);
 for (const ev of ["pointerup", "pointercancel", "pointerleave"]) $("talk").addEventListener(ev, release);
@@ -237,4 +295,5 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-setState(seat ? "idle" : "idle", seat ? "idle" : "noseat");
+app.classList.toggle("no-seat", !seat);
+setState("idle", seat ? "idle" : "noseat");
