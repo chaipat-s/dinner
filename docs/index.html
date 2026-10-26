@@ -11,12 +11,13 @@
   <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://th.api.demo.wonderful.ai">
   <link rel="preload" as="image" href="orb.webp">
-  <link rel="stylesheet" href="style.css?v=mvkvttxc">
+  <link rel="preload" as="image" href="wordmark.png">
+  <link rel="stylesheet" href="style.css?v=mvpciatz">
 </head>
 <body>
   <main id="app" data-state="idle">
     <header class="top">
-      <span class="brand">Wonderful</span>
+      <img class="brand" src="wordmark.png" alt="Wonderful" width="81" height="20" decoding="async">
     </header>
 
     <div id="inapp" class="banner" hidden>
@@ -25,14 +26,10 @@
       <a id="inapp-open" class="btn btn-light" href="#"><span class="th">เปิดในเบราว์เซอร์</span><span class="en">Open in browser</span></a>
     </div>
 
-    <section class="seat" id="seat">
-      <p class="seat-th">ที่นั่ง <span data-seat></span></p>
-      <p class="seat-en">Seat <span data-seat></span></p>
-    </section>
-
-    <section class="seat seat-missing" id="no-seat" hidden>
-      <p class="seat-th small">สแกน QR บนการ์ดที่นั่งของคุณ</p>
-      <p class="seat-en">Scan the QR code on your seat card.</p>
+    <section class="welcome" id="welcome">
+      <p class="hello" id="hello" hidden>สวัสดีค่ะ <span class="en">· Welcome</span></p>
+      <h1 class="who" id="who">ยินดีต้อนรับค่ะ</h1>
+      <p class="who-en" id="who-en">Welcome</p>
     </section>
 
     <div class="stage">
@@ -64,7 +61,7 @@
           </div>
         </div>
         <p class="received-text" id="received-text"></p>
-        <p class="received-note">พนักงานจะนำมาเสิร์ฟที่นั่งของคุณ<br><span class="en">A waiter will bring it to your seat.</span></p>
+        <p class="received-note">พนักงานจะนำมาให้ค่ะ <span class="en">A waiter will bring it over.</span></p>
       </section>
     </div>
 
@@ -74,6 +71,6 @@
       <button id="again" class="btn btn-light" type="button" hidden><span class="th">สั่งเพิ่ม</span><span class="en">Order another</span></button>
     </footer>
   </main>
-  <script type="module" src="app.js?v=mvkvttxc"></script>
+  <script type="module" src="app.js?v=mvpciatz"></script>
 </body>
 </html>

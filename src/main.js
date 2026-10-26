@@ -1,4 +1,5 @@
-// Guest page: one tap starts a browser voice call with the drinks agent; the seat comes from the QR (?s=7).
+// Guest page: one tap starts a browser voice call with the drinks agent.
+// Who is ordering comes from the link only: ?g=<attendee_id>&n=<display name> (email links), or the old ?s=<seat> (QR cards).
 import { createWonderful } from "@wonderful/web";
 import { createAgentOrb } from "./orb/wonderfulOrb.js";
 import config from "../config.json";
@@ -10,6 +11,7 @@ const CONNECT_TIMEOUT_MS = 30_000;
 const SENT = [/^ส่งรายการแล้วค่ะ/, /^Done, your order is in/i];
 const CLOSED = [/^ขออภัยค่ะ ตอนนี้รบกวนสั่งเครื่องดื่มกับพนักงาน/, /^Sorry, for now please ask your waiter/i];
 const HANG_UP_AFTER_MS = 9000;
+const GREETING = /^(สวัสดี|ยินดีต้อนรับ|Hi\b|Hello|Good evening|Welcome)/i;
 
 const params = new URLSearchParams(location.search);
 // Hold-to-talk (?mode=hold): the mic is open only while the guest holds the orb, so table talk never reaches the agent.
@@ -17,27 +19,34 @@ const HOLD = params.get("mode") === "hold";
 const RELEASE_TAIL_MS = 350;
 const seatRaw = Number(params.get("s"));
 const seat = Number.isInteger(seatRaw) && seatRaw >= 1 && seatRaw <= 20 ? seatRaw : null;
+const guest = /^[A-Za-z0-9_-]{4,64}$/.test(params.get("g") ?? "") ? params.get("g") : null;
+const name = (params.get("n") ?? "").replace(/[\u0000-\u001f\u200b\ufeff]/g, "").replace(/\s+/g, " ").trim().slice(0, 60) || null;
+const THAI = /[\u0e00-\u0e7f]/;
+// A returning guest (an earlier call on this link, this page or before a reload) gets no second greeting.
+const KEY = `dd-calls:${guest ?? (seat ? `s${seat}` : "-")}`;
+const store = { get: () => { try { return Number(localStorage.getItem(KEY)) || 0; } catch { return 0; } }, bump() { try { localStorage.setItem(KEY, String(this.get() + 1)); } catch {} } };
+let returning = store.get() > 0;
 
 const STATUS = {
   idle: ["แตะเพื่อสั่งเครื่องดื่ม", "Tap to order a drink"],
+  again: ["แตะเพื่อสั่งเพิ่ม", "Tap to order another"],
   connecting: ["กำลังเชื่อมต่อ…", "Connecting…"],
   live: HOLD ? ["กดค้างที่วงกลมแล้วพูด", "Hold the circle and speak"] : ["พูดได้เลยค่ะ", "Go ahead, I'm listening"],
   holding: ["กำลังฟัง… ปล่อยเมื่อพูดจบ", "Listening… let go when you're done"],
-  done: ["สั่งเพิ่มได้ทุกเมื่อ", "Order again any time"],
-  sent: ["เรียบร้อยค่ะ", "All set"],
+  done: ["", ""],
+  sent: ["", ""],
   failed: ["เชื่อมต่อไม่สำเร็จ แตะเพื่อลองใหม่", "Couldn't connect. Tap to try again"],
   mic: ["กรุณาอนุญาตไมโครโฟน แล้วแตะอีกครั้ง", "Please allow the microphone, then tap again"],
-  noseat: ["ไม่พบเลขที่นั่ง", "No seat number found"],
 };
 
-function setState(state, statusKey = state) {
+function setState(state, statusKey = state === "idle" && returning ? "again" : state) {
   app.dataset.state = state;
   const [th, en] = STATUS[statusKey] ?? STATUS.idle;
   $("status-th").textContent = th;
   $("status-en").textContent = en;
   $("end").hidden = !(state === "live" || state === "connecting");
   $("again").hidden = state !== "done";
-  $("talk").disabled = (state === "live" && !HOLD) || state === "connecting" || !seat;
+  $("talk").disabled = (state === "live" && !HOLD) || state === "connecting";
   if (state !== "live") agentUntil = heardAt = 0;
   syncOrb();
 }
@@ -70,10 +79,19 @@ function syncOrb() {
 const speakMs = (text) => 700 + text.length * (/[\u0e00-\u0e7f]/.test(text) ? 75 : 62);
 const buzz = (p) => navigator.vibrate?.(p);
 
-// ---- seat
-document.querySelectorAll("[data-seat]").forEach((el) => (el.textContent = seat ?? ""));
-$("seat").hidden = !seat;
-$("no-seat").hidden = !!seat;
+// ---- welcome: by name on an email link, else the seat (old QR cards), else a neutral welcome
+if (name || seat) {
+  $("hello").hidden = false;
+  if (name) {
+    const bare = name.replace(/^คุณ\s*/, "");
+    $("who").textContent = THAI.test(bare) ? `คุณ${bare}` : bare;
+    $("who").lang = THAI.test(bare) ? "th" : "en";
+    $("who-en").hidden = true;
+  } else {
+    $("who").textContent = `ที่นั่ง ${seat}`;
+    $("who-en").textContent = `Seat ${seat}`;
+  }
+}
 
 // ---- in-app browsers (LINE, Facebook, Instagram, WeChat) handle the microphone badly: offer the real browser
 const ua = navigator.userAgent;
@@ -117,6 +135,7 @@ let stops = [];
 let hangTimer = 0;
 let wakeLock = null;
 let gen = 0;
+let saidFirst = false;
 const seen = new Map();
 const firstAt = new Map();
 
@@ -128,7 +147,9 @@ const isEnd = (m) => m.type === "action" && ["end", "hangup"].includes(m.content
 function showLine(role, text) {
   if (!$("received").hidden) return;
   $("lines").hidden = false;
-  $(role === "user" ? "line-guest" : "line-agent").textContent = text;
+  const el = $(role === "user" ? "line-guest" : "line-agent");
+  el.textContent = text;
+  el.lang = THAI.test(text) ? "th" : "en";
 }
 
 function onMessage(g, m) {
@@ -139,6 +160,12 @@ function onMessage(g, m) {
   const text = textOf(m.content).replace(/[\u200b\ufeff]/g, "").trim();
   // Platform markers such as "[BACKCHANNEL_IGNORED] Hi." are not words the guest should see.
   if (!text || /^\[[A-Z_]+\]/.test(text)) return;
+  // Second and later calls: the agent's short ack is shown, a full greeting is not shown again.
+  if (m.role === "assistant" && !saidFirst) {
+    saidFirst = true;
+    if (returning && GREETING.test(text)) seen.set(m.id, Infinity);
+  }
+  if (seen.get(m.id) === Infinity) return;
   const rev = m.revision ?? 0;
   if ((seen.get(m.id) ?? -1) > rev) return;
   seen.set(m.id, rev);
@@ -165,12 +192,12 @@ function onMessage(g, m) {
   } else if (m.role === "assistant" && CLOSED.some((r) => r.test(text))) hangUpSoon();
 }
 
-// The card shows only the order; the seat is in the banner and the waiter line is the card's own note.
+// The card shows only the order; the waiter line is the card's own note.
 const orderText = (t) =>
   t
     .replace(SENT[0], "").replace(SENT[1], "").replace(/^[.\s]+/, "")
     .replace(/\s*(พนักงานจะ|A waiter will).*$/s, "")
-    .replace(/\s*สำหรับที่นั่ง\s*\d+$/, "")
+    .replace(/\s*สำหรับ(ที่นั่ง\s*\d+|คุณ\S*)$/, "")
     .replace(/,?\s*for seat \d+\.?$/i, "")
     .trim();
 
@@ -196,15 +223,17 @@ function teardown() {
 function finish() {
   if (app.dataset.state !== "live" && app.dataset.state !== "connecting") return;
   teardown();
+  returning = store.get() > 0;
   setState($("received").hidden ? "idle" : "done");
 }
 
 async function start() {
-  if (!seat || app.dataset.state === "live" || app.dataset.state === "connecting") return;
+  if (app.dataset.state === "live" || app.dataset.state === "connecting") return;
   teardown();
   const g = gen;
   seen.clear();
   firstAt.clear();
+  saidFirst = false;
   $("received").hidden = true;
   $("lines").hidden = true;
   $("line-agent").textContent = "";
@@ -233,7 +262,12 @@ async function start() {
       modality: "voice",
       source: "in_website",
       locale: "th",
-      metadata: { seat: String(seat), lang: (params.get("lang") || navigator.language || "").slice(0, 2).toLowerCase() },
+      metadata: {
+        ...(guest && { guest }),
+        ...(name && { name }),
+        ...(seat && { seat: String(seat) }),
+        lang: (params.get("lang") || navigator.language || "").slice(0, 2).toLowerCase(),
+      },
     });
     voice = session.connectVoice();
     await new Promise((resolve, reject) => {
@@ -258,6 +292,7 @@ async function start() {
     if (g !== gen) return;
     stops.push(session.subscribe((m) => onMessage(g, m), { onStatus: (s) => s === "closed" && g === gen && finish() }));
     if (HOLD) voice.setMuted(true);
+    store.bump();
     setState("live");
     buzz(12);
   } catch (err) {
@@ -296,6 +331,7 @@ $("talk").addEventListener("contextmenu", (e) => HOLD && e.preventDefault());
 $("again").addEventListener("click", start);
 $("end").addEventListener("click", () => {
   teardown();
+  returning = store.get() > 0;
   setState($("received").hidden ? "idle" : "done");
 });
 // A hidden tab (screen lock, app switch) loses the microphone on iOS; end cleanly so the next tap starts fresh.
@@ -306,5 +342,4 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-app.classList.toggle("no-seat", !seat);
-setState("idle", seat ? "idle" : "noseat");
+setState("idle");

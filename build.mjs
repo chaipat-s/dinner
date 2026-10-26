@@ -11,6 +11,7 @@ await build({ entryPoints: ["src/main.js"], bundle: true, format: "esm", target:
 for (const f of ["microphone.js", "playback.js"]) cpSync(`node_modules/@wonderful/web/voice/worklets/${f}`, `${out}/worklets/${f}`);
 cpSync("src/style.css", `${out}/style.css`);
 cpSync("src/orb/all-blue.webp", `${out}/orb.webp`);
+cpSync("src/brand/wonderful-wordmark.png", `${out}/wordmark.png`);
 writeFileSync(`${out}/index.html`, readFileSync("src/index.html", "utf8").replaceAll("__V__", v));
 writeFileSync(`${out}/.nojekyll`, "");
 console.log(`built ${out}/ (v ${v})`);

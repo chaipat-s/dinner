@@ -1,0 +1,1 @@
+wonderful-wordmark.png: the Wonderful wordmark from the last slide (17) of "Wonderful Official Intro Deck.pptx" (ppt/media/image94.png, 1660x410), recoloured to #f3f5f9 for the dark page, trimmed, 128 px tall.
