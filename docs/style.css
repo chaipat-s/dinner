@@ -105,7 +105,7 @@ main:has(#received:not([hidden])) .status { display: none; }
 .dock { display: grid; gap: 12px; padding-top: 8px; }
 .hint { font-size: 13px; line-height: 1.6; color: var(--muted); }
 .hint .en { color: #7a8396; }
-main:not([data-state="idle"]):not([data-state="failed"]) .hint { display: none; }
+main:not([data-state="idle"]):not([data-state="failed"]) .hint, main.returning .hint, main.returning .hello { display: none; }
 
 .btn {
   font: inherit; display: flex; align-items: baseline; justify-content: center; gap: 8px;

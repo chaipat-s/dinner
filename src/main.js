@@ -41,6 +41,8 @@ const STATUS = {
 
 function setState(state, statusKey = state === "idle" && returning ? "again" : state) {
   app.dataset.state = state;
+  // Returning guest: no "สวัสดีค่ะ" line, no first-time hint; just the name.
+  app.classList.toggle("returning", returning);
   const [th, en] = STATUS[statusKey] ?? STATUS.idle;
   $("status-th").textContent = th;
   $("status-en").textContent = en;
@@ -69,6 +71,12 @@ function syncOrb() {
     else next = $("received").hidden ? "listening" : "complete";
     const wake = Math.min(...[agentUntil, heardAt && heardAt + 600, heardAt && heardAt + 5000].filter((t) => t > now));
     if (Number.isFinite(wake)) orbTimer = setTimeout(syncOrb, wake - now + 30);
+  }
+  // While the agent talks or thinks, "go ahead" would be wrong: the status steps aside for the agent's line.
+  if (st === "live" && $("received").hidden && app.dataset.holding !== "1") {
+    const [th, en] = next === "listening" ? STATUS.live : ["", ""];
+    $("status-th").textContent = th;
+    $("status-en").textContent = en;
   }
   if (next === orbNow) return;
   orbNow = next;
