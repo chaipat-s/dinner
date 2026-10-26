@@ -138,3 +138,15 @@ main:has(#received:not([hidden])) .hint { display: none; }
 
 /* Never show what the mic heard (side talk at the table); see showLine in main.js. */
 .line.guest { display: none !important; }
+
+/* Help banner: in-app browser or blocked microphone. Steps, then one-tap ways out. */
+.banner-step { font-size: 15px; line-height: 1.55; color: #f3e6d2; margin-top: 6px; }
+.banner-step.en { font-size: 14px; line-height: 1.45; color: #cdb592; margin-top: 0; }
+.banner .btn + .btn { margin-top: 0; }
+.banner .btn-quiet { background: rgba(255, 255, 255, 0.09); }
+.copy-url { width: 100%; margin-top: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--ink); font: 13px/1.4 ui-monospace, monospace; }
+main.inapp .welcome { margin-top: 16px; }
+main.inapp .who { font-size: 28px; }
+
+/* Walk-in (no params): the title is the task itself, not a missing name. */
+main.walkin .who { font-size: 28px; }

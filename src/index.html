@@ -21,9 +21,13 @@
     </header>
 
     <div id="inapp" class="banner" hidden>
-      <p class="banner-th">เปิดหน้านี้ใน Safari หรือ Chrome เพื่อใช้ไมโครโฟน</p>
-      <p class="banner-en">Open this page in Safari or Chrome to use the microphone.</p>
-      <a id="inapp-open" class="btn btn-light" href="#"><span class="th">เปิดในเบราว์เซอร์</span><span class="en">Open in browser</span></a>
+      <p class="banner-th" id="inapp-th"></p>
+      <p class="banner-en" id="inapp-en"></p>
+      <p class="banner-step" id="step-th"></p>
+      <p class="banner-step en" id="step-en"></p>
+      <a id="inapp-open" class="btn btn-light" href="#" hidden><span class="th" id="open-th">เปิดในเบราว์เซอร์</span><span class="en" id="open-en">Open in browser</span></a>
+      <button id="copy" class="btn btn-quiet" type="button"><span class="th" id="copy-th">คัดลอกลิงก์</span><span class="en" id="copy-en">Copy link</span></button>
+      <input id="copy-url" class="copy-url" type="text" readonly hidden aria-label="Link">
     </div>
 
     <section class="welcome" id="welcome">

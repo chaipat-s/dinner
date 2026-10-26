@@ -25,10 +25,13 @@ const THAI = /[\u0e00-\u0e7f]/;
 // A returning guest (an earlier call on this link, this page or before a reload) gets no second greeting.
 const KEY = `dd-calls:${guest ?? (seat ? `s${seat}` : "-")}`;
 const store = { get: () => { try { return Number(localStorage.getItem(KEY)) || 0; } catch { return 0; } }, bump() { try { localStorage.setItem(KEY, String(this.get() + 1)); } catch {} } };
-let returning = store.get() > 0;
+// Walk-in link (no params): a house phone passes from guest to guest, so every call is a first call.
+const WALKIN = !name && !seat && !guest;
+const wasHere = () => !WALKIN && store.get() > 0;
+let returning = wasHere();
 
 const STATUS = {
-  idle: ["แตะเพื่อสั่งเครื่องดื่ม", "Tap to order a drink"],
+  idle: WALKIN ? ["แตะ แล้วบอกชื่อกับเครื่องดื่มที่ต้องการ", "Tap, then say your name and your drink"] : ["แตะเพื่อสั่งเครื่องดื่ม", "Tap to order a drink"],
   again: ["แตะเพื่อสั่งเพิ่ม", "Tap to order another"],
   connecting: ["กำลังเชื่อมต่อ…", "Connecting…"],
   live: HOLD ? ["กดค้างที่วงกลมแล้วพูด", "Hold the circle and speak"] : ["พูดได้เลยค่ะ", "Go ahead, I'm listening"],
@@ -36,7 +39,7 @@ const STATUS = {
   done: ["", ""],
   sent: ["", ""],
   failed: ["เชื่อมต่อไม่สำเร็จ แตะเพื่อลองใหม่", "Couldn't connect. Tap to try again"],
-  mic: ["กรุณาอนุญาตไมโครโฟน แล้วแตะอีกครั้ง", "Please allow the microphone, then tap again"],
+  mic: ["ใช้ไมโครโฟนไม่ได้ ดูวิธีแก้ด้านบน", "The microphone is blocked. See the steps above"],
 };
 
 function setState(state, statusKey = state === "idle" && returning ? "again" : state) {
@@ -87,29 +90,104 @@ function syncOrb() {
 const speakMs = (text) => 700 + text.length * (/[\u0e00-\u0e7f]/.test(text) ? 75 : 62);
 const buzz = (p) => navigator.vibrate?.(p);
 
-// ---- welcome: by name on an email link, else the seat (old QR cards), else a neutral welcome
-if (name || seat) {
-  $("hello").hidden = false;
-  if (name) {
-    const bare = name.replace(/^คุณ\s*/, "");
-    $("who").textContent = THAI.test(bare) ? `คุณ${bare}` : bare;
-    $("who").lang = THAI.test(bare) ? "th" : "en";
-    $("who-en").hidden = true;
-  } else {
-    $("who").textContent = `ที่นั่ง ${seat}`;
-    $("who-en").textContent = `Seat ${seat}`;
-  }
+// ---- welcome: by name on an email link, else the seat (old QR cards), else the walk-in welcome (no params)
+$("hello").hidden = false;
+if (name) {
+  const bare = name.replace(/^คุณ\s*/, "");
+  $("who").textContent = THAI.test(bare) ? `คุณ${bare}` : bare;
+  $("who").lang = THAI.test(bare) ? "th" : "en";
+  $("who-en").hidden = true;
+} else if (seat) {
+  $("who").textContent = `ที่นั่ง ${seat}`;
+  $("who-en").textContent = `Seat ${seat}`;
+} else {
+  app.classList.add("walkin");
+  $("who").textContent = "สั่งเครื่องดื่มด้วยเสียง";
+  $("who-en").textContent = "Order a drink by voice";
 }
 
-// ---- in-app browsers (LINE, Facebook, Instagram, WeChat) handle the microphone badly: offer the real browser
+// ---- in-app browsers: email, social and chat apps open links in their own web view, where the microphone
+// is often blocked (the app must grant it; many never do). Detected by user agent; first match wins.
+// Not detectable and not needed: Gmail and Outlook on Android open Chrome Custom Tabs, Telegram and WhatsApp on
+// iOS open Safari (SFSafariViewController); those are the real browser engine with a Safari/Chrome user agent.
 const ua = navigator.userAgent;
-if (/\bLine\//i.test(ua) || /FBAN|FBAV|Instagram|MicroMessenger/i.test(ua)) {
-  $("inapp").hidden = false;
-  app.classList.add("inapp");
+const IOS = /\b(iPhone|iPad|iPod)\b/.test(ua);
+const ANDROID = /\bAndroid\b/.test(ua);
+const BROWSER = IOS ? "Safari" : ANDROID ? "Chrome" : "Safari / Chrome";
+const MENU = IOS ? "⋯" : "⋮";
+// [app, UA test, Thai step, English step]
+const APPS = [
+  ["line", /\bLine\//i, `แตะปุ่มด้านล่าง หรือแตะ ${MENU} แล้วเลือกเปิดในเบราว์เซอร์`, `Tap the button below, or tap ${MENU} → Open in browser.`],
+  ["wechat", /MicroMessenger/i, `แตะ ··· มุมบนขวา แล้วเลือกเปิดใน ${BROWSER}`, `Tap ··· at the top right → Open in ${BROWSER}.`],
+  ["instagram", /\bInstagram\b/i, `แตะ ${MENU} มุมบนขวา แล้วเลือกเปิดในเบราว์เซอร์ภายนอก`, `Tap ${MENU} at the top right → Open in external browser.`],
+  ["messenger", /MessengerForiOS|Orca-Android|MessengerLite/i, `แตะ ${MENU} มุมบนขวา แล้วเลือกเปิดใน ${BROWSER}`, `Tap ${MENU} at the top right → Open in ${BROWSER}.`],
+  ["facebook", /FBAN|FBAV|FB_IAB|FBIOS|FB4A/, `แตะ ${MENU} มุมบนขวา แล้วเลือกเปิดใน ${BROWSER}`, `Tap ${MENU} at the top right → Open in ${BROWSER}.`],
+  ["linkedin", /LinkedInApp/i, `แตะ ${MENU} มุมบนขวา แล้วเลือกเปิดในเบราว์เซอร์`, `Tap ${MENU} at the top right → Open in browser.`],
+  ["google", /\bGSA\//, `แตะปุ่มแชร์หรือ ${MENU} แล้วเลือกเปิดใน ${BROWSER}`, `Tap the share button or ${MENU} → Open in ${BROWSER}.`],
+  ["chat", /\bWhatsApp\b|\bTelegram\b|KAKAOTALK|\bTwitter\b|Snapchat|BytedanceWebview|musical_ly/i, `แตะ ${MENU} แล้วเลือกเปิดใน ${BROWSER}`, `Tap ${MENU} → Open in ${BROWSER}.`],
+  // Android WebView (Outlook, Gmail with Custom Tabs off, any app): the "; wv)" token.
+  ["webview", /\bAndroid\b.*;\s?wv\)/, `แตะ ${MENU} มุมบนขวา แล้วเลือกเปิดใน Chrome`, `Tap ${MENU} at the top right → Open in Chrome.`],
+  // iOS WKWebView (Gmail and Outlook in-app browsers, most apps): no "Safari/" token. Real Safari, Chrome (CriOS),
+  // Firefox (FxiOS), Edge and SFSafariViewController all carry it.
+  ["webview", /\b(iPhone|iPad|iPod)\b(?!.*Safari\/)/, `แตะ ${MENU} หรือปุ่มแชร์ แล้วเลือกเปิดใน Safari`, `Tap ${MENU} or the share button → Open in Safari.`],
+];
+const hit = APPS.find(([, re]) => re.test(ua)) ?? (!navigator.mediaDevices?.getUserMedia ? ["nomic", null, `เปิดลิงก์นี้ใน ${BROWSER}`, `Open this link in ${BROWSER}.`] : null);
+const PASTE = [`หรือคัดลอกลิงก์ แล้ววางใน ${BROWSER}`, `Or copy the link and paste it into ${BROWSER}.`];
+
+// The banner: why, the app's own steps, a one-tap way out where one exists, and Copy link.
+function showHelp(kind) {
+  const [th, en] = kind === "mic" ? ["ใช้ไมโครโฟนไม่ได้", "The microphone is blocked"] : [`เปิดหน้านี้ใน ${BROWSER} เพื่อใช้ไมโครโฟน`, `Open this page in ${BROWSER} to use the microphone.`];
+  const [t, e] = hit ? [hit[2], hit[3]] : micSteps();
+  const step = kind === "mic" && !hit
+    ? [`${t} แล้วแตะวงกลมอีกครั้ง ถ้ายังไม่ได้ คัดลอกลิงก์ แล้วเปิดใน ${BROWSER}`, `${e} Then tap the circle again. Still blocked? Copy the link and open it in ${BROWSER}.`]
+    : [`${t} ${PASTE[0]}`, `${e} ${PASTE[1]}`];
+  $("inapp-th").textContent = th;
+  $("inapp-en").textContent = en;
+  $("step-th").textContent = step[0];
+  $("step-en").textContent = step[1];
+  const open = $("inapp-open");
   const url = new URL(location.href);
-  if (/\bLine\//i.test(ua)) url.searchParams.set("openExternalBrowser", "1");
-  $("inapp-open").href = url.toString();
+  if (hit?.[0] === "line") {
+    url.searchParams.set("openExternalBrowser", "1"); // LINE opens this in the phone's default browser
+    open.href = url.toString();
+    open.hidden = false;
+  } else if (hit && ANDROID) {
+    // Android: hand the link to Chrome; if Chrome is missing, stay here (the steps and Copy link still work).
+    open.href = `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=https;package=com.android.chrome;end`;
+    $("open-th").textContent = "เปิดใน Chrome";
+    $("open-en").textContent = "Open in Chrome";
+    open.hidden = false;
+  }
+  $("inapp").hidden = false;
+  $("inapp").dataset.kind = kind;
+  app.classList.add("inapp");
 }
+// Mic blocked in a real browser: where that browser keeps the site's microphone switch.
+function micSteps() {
+  if (/CriOS/.test(ua)) return ["เปิด ตั้งค่า › Chrome › ไมโครโฟน", "Open Settings › Chrome › turn on Microphone."];
+  if (IOS) return ["แตะ aA หรือ ⋯ ที่แถบที่อยู่ › การตั้งค่าเว็บไซต์ › ไมโครโฟน › อนุญาต", "Tap aA or ⋯ in the address bar › Website Settings › Microphone › Allow."];
+  if (ANDROID) return ["แตะไอคอนหน้าที่อยู่เว็บ › สิทธิ์ › ไมโครโฟน › อนุญาต", "Tap the icon left of the address › Permissions › Microphone › Allow."];
+  return ["อนุญาตไมโครโฟนให้เว็บนี้", "Allow the microphone for this site."];
+}
+if (hit) showHelp("inapp");
+
+$("copy").addEventListener("click", async () => {
+  const url = location.href.replace(/[?&]openExternalBrowser=1/, "");
+  let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; } catch {}
+  if (!ok) {
+    const box = $("copy-url");
+    box.value = url;
+    box.hidden = false;
+    box.focus();
+    box.setSelectionRange(0, url.length);
+    try { ok = document.execCommand("copy"); } catch {}
+  }
+  $("copy-th").textContent = ok ? "คัดลอกแล้ว" : "กดค้างที่ลิงก์ด้านล่างเพื่อคัดลอก";
+  $("copy-en").textContent = ok ? "Copied" : "Press and hold the link below";
+  buzz(10);
+  if (ok) setTimeout(() => { $("copy-th").textContent = "คัดลอกลิงก์"; $("copy-en").textContent = "Copy link"; }, 2500);
+});
 
 // ---- orb: live WebGL where available, else the still
 let orb = null;
@@ -231,7 +309,7 @@ function teardown() {
 function finish() {
   if (app.dataset.state !== "live" && app.dataset.state !== "connecting") return;
   teardown();
-  returning = store.get() > 0;
+  returning = wasHere();
   setState($("received").hidden ? "idle" : "done");
 }
 
@@ -255,6 +333,7 @@ async function start() {
     console.warn("microphone", err);
     if (g === gen) {
       setState("failed", "mic");
+      showHelp("mic");
       buzz(40);
     }
     return;
@@ -339,7 +418,7 @@ $("talk").addEventListener("contextmenu", (e) => HOLD && e.preventDefault());
 $("again").addEventListener("click", start);
 $("end").addEventListener("click", () => {
   teardown();
-  returning = store.get() > 0;
+  returning = wasHere();
   setState($("received").hidden ? "idle" : "done");
 });
 // A hidden tab (screen lock, app switch) loses the microphone on iOS; end cleanly so the next tap starts fresh.
