@@ -14,4 +14,6 @@ cpSync("src/orb/all-blue.webp", `${out}/orb.webp`);
 cpSync("src/brand/wonderful-wordmark.png", `${out}/wordmark.png`);
 writeFileSync(`${out}/index.html`, readFileSync("src/index.html", "utf8").replaceAll("__V__", v));
 writeFileSync(`${out}/.nojekyll`, "");
+// Talk mode, switched remotely by scripts/talk-mode.sh (hands-free | hold).
+cpSync("src/mode.json", `${out}/mode.json`);
 console.log(`built ${out}/ (v ${v})`);

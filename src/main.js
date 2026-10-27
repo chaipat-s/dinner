@@ -14,8 +14,33 @@ const HANG_UP_AFTER_MS = 9000;
 const GREETING = /^(สวัสดี|ยินดีต้อนรับ|Hi\b|Hello|Good evening|Welcome)/i;
 
 const params = new URLSearchParams(location.search);
-// Hold-to-talk (?mode=hold): the mic is open only while the guest holds the orb, so table talk never reaches the agent.
-const HOLD = params.get("mode") === "hold";
+// Hold-to-talk: the mic is open only while the guest holds the orb, so table talk never reaches the agent.
+// The mode is switched remotely by mode.json on this site ({"talk":"hold"|"hands-free"}, scripts/talk-mode.sh),
+// fetched at load and again on every tap that starts a call; &mode=hold / &mode=free in the link overrides it.
+// A slow or failed fetch (over 1.5 s) means hands-free.
+const URL_MODE = ["hold", "free"].includes(params.get("mode")) ? params.get("mode") : null;
+let HOLD = URL_MODE === "hold";
+async function loadMode() {
+  let hold = URL_MODE === "hold";
+  if (!URL_MODE) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 1500);
+    try {
+      const r = await fetch(`mode.json?t=${Date.now()}`, { cache: "no-store", signal: ctl.signal });
+      hold = (await r.json()).talk === "hold";
+    } catch {
+      hold = false;
+    }
+    clearTimeout(timer);
+  }
+  HOLD = hold;
+  app.classList.toggle("hold", HOLD);
+  app.dataset.talk = HOLD ? "hold" : "hands-free";
+  $("hint").innerHTML = HOLD
+    ? 'แตะวงกลม แล้วแตะค้างไว้ขณะพูด<br><span class="en">Tap the circle, then hold it while you speak.</span>'
+    : 'ถือโทรศัพท์ใกล้ปาก เหมือนส่งข้อความเสียง<br><span class="en">Hold the phone close, like a voice message.</span>';
+}
+loadMode(); // at load too, so the idle hint already matches the mode
 const RELEASE_TAIL_MS = 350;
 const seatRaw = Number(params.get("s"));
 const seat = Number.isInteger(seatRaw) && seatRaw >= 1 && seatRaw <= 20 ? seatRaw : null;
@@ -34,7 +59,7 @@ const STATUS = {
   idle: WALKIN ? ["แตะ แล้วบอกชื่อกับเครื่องดื่มที่ต้องการ", "Tap, then say your name and your drink"] : ["แตะเพื่อสั่งเครื่องดื่ม", "Tap to order a drink"],
   again: ["แตะเพื่อสั่งเพิ่ม", "Tap to order another"],
   connecting: ["กำลังเชื่อมต่อ…", "Connecting…"],
-  live: HOLD ? ["กดค้างที่วงกลมแล้วพูด", "Hold the circle and speak"] : ["พูดได้เลยค่ะ", "Go ahead, I'm listening"],
+  get live() { return HOLD ? ["แตะค้างไว้ขณะพูด", "Hold while you speak"] : ["พูดได้เลยค่ะ", "Go ahead, I'm listening"]; },
   holding: ["กำลังฟัง… ปล่อยเมื่อพูดจบ", "Listening… let go when you're done"],
   done: ["", ""],
   sent: ["", ""],
@@ -325,6 +350,7 @@ async function start() {
   $("line-agent").textContent = "";
   $("line-guest").textContent = "";
   setState("connecting");
+  const modeP = loadMode();
   // Ask for the microphone inside the tap, so iOS shows its prompt now.
   try {
     const probe = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -339,6 +365,8 @@ async function start() {
     return;
   }
   try {
+    await modeP;
+    if (g !== gen) return;
     wakeLock = (await navigator.wakeLock?.request("screen").catch(() => null)) ?? null;
     client ??= createWonderful({ key: config.key, agentId: config.agent_id, baseUrl: config.base_url, storageKey: "dd-guest" });
     const old = await client.getActiveSessions("voice").catch(() => []);
