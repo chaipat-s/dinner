@@ -46,7 +46,7 @@ async function loadMode() {
     : 'ถือโทรศัพท์ใกล้ปาก เหมือนส่งข้อความเสียง<br><span class="en">Hold the phone close, like a voice message.</span>';
 }
 /** The mode set in the waiter App, loaded as a script (window.__ddTalk); null when it does not answer within 1.5 s. */
-const TALK_URL = "https://th.api.demo.wonderful.ai/api/public/functions/a2771683-39f0-4962-a28c-e06c6120360a/94c1ffd0-24bf-4fec-b7e8-2b318a0a8a26/dd-talk";
+const TALK_URL = "https://th.api.demo.wonderful.ai/api/public/functions/a2771683-39f0-4962-a28c-e06c6120360a/94c1ffd0-24bf-4fec-b7e8-2b318a0a8a26/drinks-orders/dd-talk";
 function liveTalk() {
   return new Promise((done) => {
     window.__ddTalk = null;
