@@ -15,23 +15,28 @@ const GREETING = /^(สวัสดี|ยินดีต้อนรับ|Hi\b
 
 const params = new URLSearchParams(location.search);
 // Hold-to-talk: the mic is open only while the guest holds the orb, so table talk never reaches the agent.
-// The mode is switched remotely by mode.json on this site ({"talk":"hold"|"hands-free"}, scripts/talk-mode.sh),
-// fetched at load and again on every tap that starts a call; &mode=hold / &mode=free in the link overrides it.
-// A slow or failed fetch (over 1.5 s) means hands-free.
+// The mode is switched remotely from the waiter App's Settings (dd_settings.talk, served by the public Function
+// dd-talk as a script: the API does not allow this origin for fetch) or by scripts/talk-mode.sh; mode.json on this
+// site is the fallback. Read at load and again on every tap that starts a call; &mode=hold / &mode=free overrides it.
+// Nothing within 1.5 s means hands-free.
 const URL_MODE = ["hold", "free"].includes(params.get("mode")) ? params.get("mode") : null;
 let HOLD = URL_MODE === "hold";
 async function loadMode() {
   let hold = URL_MODE === "hold";
   if (!URL_MODE) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 1500);
-    try {
-      const r = await fetch(`mode.json?t=${Date.now()}`, { cache: "no-store", signal: ctl.signal });
-      hold = (await r.json()).talk === "hold";
-    } catch {
-      hold = false;
+    const live = await liveTalk();
+    if (live) hold = live === "hold";
+    else {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 1500);
+      try {
+        const r = await fetch(`mode.json?t=${Date.now()}`, { cache: "no-store", signal: ctl.signal });
+        hold = (await r.json()).talk === "hold";
+      } catch {
+        hold = false;
+      }
+      clearTimeout(timer);
     }
-    clearTimeout(timer);
   }
   HOLD = hold;
   app.classList.toggle("hold", HOLD);
@@ -39,6 +44,24 @@ async function loadMode() {
   $("hint").innerHTML = HOLD
     ? 'แตะวงกลม แล้วแตะค้างไว้ขณะพูด<br><span class="en">Tap the circle, then hold it while you speak.</span>'
     : 'ถือโทรศัพท์ใกล้ปาก เหมือนส่งข้อความเสียง<br><span class="en">Hold the phone close, like a voice message.</span>';
+}
+/** The mode set in the waiter App, loaded as a script (window.__ddTalk); null when it does not answer within 1.5 s. */
+const TALK_URL = "https://th.api.demo.wonderful.ai/api/public/functions/a2771683-39f0-4962-a28c-e06c6120360a/94c1ffd0-24bf-4fec-b7e8-2b318a0a8a26/dd-talk";
+function liveTalk() {
+  return new Promise((done) => {
+    window.__ddTalk = null;
+    const tag = document.createElement("script");
+    const finish = (v) => {
+      clearTimeout(timer);
+      tag.remove();
+      done(v === "hold" || v === "hands-free" ? v : null);
+    };
+    const timer = setTimeout(() => finish(null), 1500);
+    tag.onload = () => finish(window.__ddTalk?.talk);
+    tag.onerror = () => finish(null);
+    tag.src = `${TALK_URL}?t=${Date.now()}`;
+    document.head.appendChild(tag);
+  });
 }
 loadMode(); // at load too, so the idle hint already matches the mode
 const RELEASE_TAIL_MS = 350;
